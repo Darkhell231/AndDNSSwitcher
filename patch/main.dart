@@ -1,7 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() => runApp(const App());
 
@@ -30,7 +31,7 @@ class _HomeState extends State<Home> {
   List<Map<String, String>> items = [];
   String mode = '';
   String? host;
-  SharedPreferences? prefs;
+  File? file;
 
   @override
   void initState() {
@@ -39,17 +40,27 @@ class _HomeState extends State<Home> {
   }
 
   Future<void> init() async {
-    prefs = await SharedPreferences.getInstance();
-    final raw = prefs!.getString('items');
-    if (raw != null) {
-      items = (jsonDecode(raw) as List)
-          .map((e) => Map<String, String>.from(e))
-          .toList();
-    }
+    final dir = await getApplicationSupportDirectory();
+    file = File('${dir.path}/dns_items.json');
+    try {
+      if (await file!.exists()) {
+        items = (jsonDecode(await file!.readAsString()) as List)
+            .map((e) => Map<String, String>.from(e))
+            .toList();
+      }
+    } catch (_) {}
     await refresh();
   }
 
-  Future<void> save() async => prefs!.setString('items', jsonEncode(items));
+  Future<void> save() async {
+    try {
+      await file!.writeAsString(jsonEncode(items), flush: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Не удалось сохранить: $e')));
+    }
+  }
 
   Future<void> refresh() async {
     try {
@@ -66,7 +77,7 @@ class _HomeState extends State<Home> {
     } on PlatformException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Нет разрешения WRITE_SECURE_SETTINGS (выдай через adb)'),
+        content: Text('Нет разрешения WRITE_SECURE_SETTINGS (выдай через Shizuku/adb)'),
       ));
     }
     await refresh();
