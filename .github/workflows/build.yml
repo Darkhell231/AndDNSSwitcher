@@ -10,7 +10,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable }
       - run: flutter create --org com.example --project-name dnsswitch .
-      - run: flutter pub add shared_preferences
+      - run: flutter pub add path_provider
       - run: |
           cp patch/main.dart lib/main.dart
           cp patch/MainActivity.kt android/app/src/main/kotlin/com/example/dnsswitch/MainActivity.kt
