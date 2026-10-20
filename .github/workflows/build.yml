@@ -24,7 +24,7 @@ jobs:
       - run: flutter create --org com.example --project-name dnsswitch .
       - run: |
           flutter pub add path_provider
-          flutter pub add file_picker
+          flutter pub add file_picker:^8.3.7
           flutter pub add dev:flutter_launcher_icons
       - run: |
           cp patch/main.dart lib/main.dart
