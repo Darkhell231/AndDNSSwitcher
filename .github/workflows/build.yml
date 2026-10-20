@@ -10,11 +10,25 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { channel: stable }
       - run: flutter create --org com.example --project-name dnsswitch .
-      - run: flutter pub add path_provider
+      - run: |
+          flutter pub add path_provider
+          flutter pub add dev:flutter_launcher_icons
       - run: |
           cp patch/main.dart lib/main.dart
           cp patch/MainActivity.kt android/app/src/main/kotlin/com/example/dnsswitch/MainActivity.kt
-          sed -i 's|<application|<uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>\n    <application|' android/app/src/main/AndroidManifest.xml
+          sed -i 's|<application|<uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"/>\n    <uses-permission android:name="android.permission.INTERNET"/>\n    <application|' android/app/src/main/AndroidManifest.xml
+          sed -i 's|android:label="[^"]*"|android:label="AndDNSwitcher"|' android/app/src/main/AndroidManifest.xml
+      - run: |
+          cat >> pubspec.yaml <<'EOF'
+
+          flutter_launcher_icons:
+            android: true
+            ios: false
+            image_path: "patch/icon.png"
+            adaptive_icon_background: "#1A1A2E"
+            adaptive_icon_foreground: "patch/icon_fg.png"
+          EOF
+          dart run flutter_launcher_icons
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
         with: { name: apk, path: build/app/outputs/flutter-apk/app-release.apk }
