@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -75,6 +77,11 @@ class _HomeState extends State<Home> {
     init();
   }
 
+  void snack(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
     file = File('${dir.path}/dns_items.json');
@@ -93,9 +100,7 @@ class _HomeState extends State<Home> {
     try {
       await file!.writeAsString(jsonEncode(items), flush: true);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Не удалось сохранить: $e')));
+      snack('Не удалось сохранить: $e');
     }
   }
 
@@ -131,12 +136,77 @@ class _HomeState extends State<Home> {
         return;
       }
     } on PlatformException {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Нет разрешения WRITE_SECURE_SETTINGS (выдай через Shizuku/adb)'),
-      ));
+      snack('Нет разрешения WRITE_SECURE_SETTINGS (выдай через Shizuku/adb)');
     }
     await refresh();
+  }
+
+  Future<void> exportList() async {
+    if (items.isEmpty) {
+      snack('Список пуст');
+      return;
+    }
+    try {
+      final data = const JsonEncoder.withIndent('  ').convert(items);
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Экспорт DNS',
+        fileName: 'dns_list.json',
+        bytes: Uint8List.fromList(utf8.encode(data)),
+      );
+      if (path != null) snack('Экспортировано: ${items.length}');
+    } catch (e) {
+      snack('Ошибка экспорта: $e');
+    }
+  }
+
+  Future<void> importList() async {
+    try {
+      final r = await FilePicker.platform.pickFiles(withData: true);
+      if (r == null || r.files.isEmpty) return;
+      final f = r.files.first;
+      final bytes = f.bytes ??
+          (f.path != null ? await File(f.path!).readAsBytes() : null);
+      if (bytes == null) {
+        snack('Не удалось прочитать файл');
+        return;
+      }
+      final text = utf8.decode(bytes, allowMalformed: true);
+      final found = <Map<String, String>>[];
+      try {
+        for (final e in jsonDecode(text) as List) {
+          final m = Map<String, dynamic>.from(e);
+          final h = (m['host'] ?? '').toString().trim();
+          if (h.isEmpty) continue;
+          final n = (m['name'] ?? '').toString().trim();
+          found.add({'name': n.isEmpty ? h : n, 'host': h});
+        }
+      } catch (_) {
+        // не JSON: читаем строки вида "host" или "название host"
+        for (final line in const LineSplitter().convert(text)) {
+          final parts = line
+              .trim()
+              .split(RegExp(r'[\s;,]+'))
+              .where((s) => s.isNotEmpty)
+              .toList();
+          if (parts.isEmpty) continue;
+          final h = parts.last;
+          final n = parts.length > 1 ? parts.sublist(0, parts.length - 1).join(' ') : h;
+          found.add({'name': n, 'host': h});
+        }
+      }
+      var added = 0;
+      for (final it in found) {
+        if (items.any((x) => x['host'] == it['host'])) continue;
+        items.add(it);
+        added++;
+      }
+      await save();
+      setState(() {});
+      snack('Добавлено: $added, пропущено дублей: ${found.length - added}');
+      checkAll();
+    } catch (e) {
+      snack('Ошибка импорта: $e');
+    }
   }
 
   Future<void> addDialog() async {
@@ -217,6 +287,16 @@ class _HomeState extends State<Home> {
               tooltip: 'Проверить все'),
           TextButton(onPressed: () => call('off'), child: const Text('Выкл')),
           TextButton(onPressed: () => call('auto'), child: const Text('Авто')),
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'export') exportList();
+              if (v == 'import') importList();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'export', child: Text('Экспорт в файл')),
+              PopupMenuItem(value: 'import', child: Text('Импорт из файла')),
+            ],
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(28),
