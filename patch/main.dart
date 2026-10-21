@@ -6,6 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
+// true  = после выбора DNS приложение закроется (через 1 сек)
+// false = приложение останется открытым
+const bool closeAfterSet = false;
+
 void main() => runApp(const App());
 
 class App extends StatelessWidget {
@@ -132,8 +136,12 @@ class _HomeState extends State<Home> {
     try {
       await ch.invokeMethod(method, {'host': h});
       if (method == 'set') {
-        SystemNavigator.pop();
-        return;
+        snack('DNS установлен: $h');
+        if (closeAfterSet) {
+          await Future.delayed(const Duration(seconds: 1));
+          SystemNavigator.pop();
+          return;
+        }
       }
     } on PlatformException {
       snack('Нет разрешения WRITE_SECURE_SETTINGS (выдай через Shizuku/adb)');
@@ -190,7 +198,9 @@ class _HomeState extends State<Home> {
               .toList();
           if (parts.isEmpty) continue;
           final h = parts.last;
-          final n = parts.length > 1 ? parts.sublist(0, parts.length - 1).join(' ') : h;
+          final n = parts.length > 1
+              ? parts.sublist(0, parts.length - 1).join(' ')
+              : h;
           found.add({'name': n, 'host': h});
         }
       }
@@ -306,8 +316,8 @@ class _HomeState extends State<Home> {
           ),
         ),
       ),
-      floatingActionButton:
-          FloatingActionButton(onPressed: addDialog, child: const Icon(Icons.add)),
+      floatingActionButton: FloatingActionButton(
+          onPressed: addDialog, child: const Icon(Icons.add)),
       body: RefreshIndicator(
         onRefresh: checkAll,
         child: ListView.builder(
