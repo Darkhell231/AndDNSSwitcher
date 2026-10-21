@@ -21,6 +21,18 @@ jobs:
             git commit -m "add keystore"
             git push
           fi
+      - name: Фикс compileSdk для плагинов
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/sdk.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              if (p.hasProperty('android')) {
+                p.android.compileSdkVersion 36
+              }
+            }
+          }
+          EOF
       - run: flutter create --org com.example --project-name dnsswitch .
       - run: |
           flutter pub add path_provider
